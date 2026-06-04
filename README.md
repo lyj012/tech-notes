@@ -1,6 +1,10 @@
 # Tech Notes
 
-个人技术知识库与项目复盘。
+个人技术知识库。
+
+记录真实项目开发中的设计、踩坑与复盘。
+
+---
 
 ## PDF Platform
 
@@ -12,22 +16,22 @@
 
 ## AI Engineering
 
-持续更新
+待更新
 
 ---
 
 ## Java Backend
 
-持续更新
+待更新
 
 ---
 
 ## System Design
 
-持续更新
+待更新
 
 ---
 
 ## XXL-JOB
 
-持续更新
+待更新
