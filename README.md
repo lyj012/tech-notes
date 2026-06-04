@@ -2,7 +2,17 @@
 
 个人技术知识库。
 
-记录真实项目开发中的设计、踩坑与复盘。
+记录真实项目开发中的设计方案、踩坑记录、系统架构与 AI 工程化实践。
+
+---
+
+## 当前方向
+
+- Java Backend
+- AI Engineering
+- System Design
+- SaaS Platform
+- Agent / RAG / Workflow
 
 ---
 
@@ -16,22 +26,35 @@
 
 ## AI Engineering
 
-待更新
+记录 AI 工程化相关学习与项目实践。
+
+### Topics
+
+- Agent
+- RAG
+- Workflow
+- MCP
+- Prompt Engineering
+- Context Memory
 
 ---
 
-## Java Backend
+## 规划
 
-待更新
+### PDF Platform
+
+- 游客支付后如何绑定登录用户
+- 为什么PDF下载不能直接暴露文件链接
+- 为什么PDF转换任务迁移到XXL-JOB
+- PDF平台会员体系设计
+
+### AI Engineering
+
+- AI研发工程师成长路线
+- MCP学习笔记
+- Workflow设计实践
+- Agent设计实践
 
 ---
 
-## System Design
-
-待更新
-
----
-
-## XXL-JOB
-
-待更新
+持续更新中...
