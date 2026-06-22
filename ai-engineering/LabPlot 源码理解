@@ -1,0 +1,369 @@
+# LabPlot 源码理解：从数据容器到科学绘图的桌面应用架构
+
+> 本文是个人对开源项目 **LabPlot** 的源码阅读与架构分析笔记，目的是学习一个成熟的大型 C++/Qt 桌面科学软件是如何组织的。
+>
+> **声明**：本文是源码阅读与架构分析，**不代表作者参与了 LabPlot 的开发**。LabPlot 由 KDE 社区及其原作者开发，著作权与商标归原项目所有。文中结论尽量给出源码路径（仓库相对路径）作为依据；无法确认处标注「待进一步验证」。
+>
+> **分析基准**：本文基于 LabPlot 仓库 commit `e8bf74a`（对应发布版本 **2.12.0**，2025-04-25），上游仓库为 `github.com/KDE/labplot`。不同版本目录与行号可能变化。
+>
+> **许可证**：LabPlot 主体以 **GPL-2.0-or-later** 发布（见仓库 `LICENSES/` 与 `.reuse/dep5`），部分捆绑库为其他许可。**任何二次开发/分发前请自行核对具体许可证义务**，本文不构成法律意见。
+
+---
+
+## 1. 为什么分析 LabPlot
+
+很多人把"数据可视化"理解为"调一个图表库画张图"。但一个能让科研人员**不写代码**完成"导入数据 → 出版级绘图 → 拟合分析 → 存档复用"的桌面软件，工程复杂度远高于"画图"。LabPlot 恰好是一个**真实、活跃、十余年演进**的此类系统，且全部开源，是研究"大型 C++/Qt 桌面应用如何分层、如何管理海量对象、如何把数据与视图解耦"的好样本。
+
+本文关注的不是"它有什么功能"，而是**它的工程结构为什么这么设计、复杂度来自哪里、哪些设计值得借鉴**。
+
+## 2. LabPlot 是什么
+
+LabPlot 是一款免费开源、跨平台的**科学数据可视化与分析桌面软件**。核心能力可概括为三点：
+
+- **出版级 2D 科学绘图**：矢量输出（PDF/SVG），精确控制坐标轴、刻度、对数轴、误差棒。
+- **零代码数据分析**：曲线拟合、平滑、插值、傅里叶变换、统计等，分析结果以"挂在数据上的对象"形式存在。
+- **层级化项目管理**：一个项目就是一棵对象树，支持撤销/重做、序列化为单一项目文件。
+
+从源码看，它是**工具软件 + 轻量数据分析平台**的组合，而不是一个供二次开发的框架——它的扩展主要靠**继承既有抽象**，而非插件（见第 17 节）。
+
+## 3. 它与图表库、Excel 和 Jupyter 的区别
+
+| 对比对象 | 本质差异（结合源码） |
+|---|---|
+| **图表库**（如绘图组件） | 图表库是"给定数据画一张图"的函数；LabPlot 把曲线、坐标轴、图例都做成**有生命周期、可撤销、可序列化的对象**（均继承 `AbstractAspect`），数据变了对象自动重算重绘。 |
+| **Excel** | Excel 以单一网格为中心；LabPlot 以**对象树**为中心，表格只是数据容器之一，绘图与分析是挂在数据上的独立对象，且支持矢量出版输出。 |
+| **Jupyter Notebook** | Notebook 是"写代码驱动计算"；LabPlot 是"GUI 操作驱动计算"，分析以对象而非代码单元存在。值得注意的是 LabPlot 反而**内置**了 Notebook 集成（通过 KDE Cantor），把交互式计算作为一种可选能力纳入项目树。 |
+
+**核心闭环**（MVP 级）：创建项目 → 导入数据到 Spreadsheet → 新建 Worksheet 画曲线 → 绑定数据列 → 调样式 → 保存/重开 → 导出。
+**增强能力**（非 MVP 必需）：拟合/统计/信号分析、科学二进制格式导入、Notebook、Live Data、Datapicker 等。
+
+## 4. 分析版本与方法
+
+- **版本**：commit `e8bf74a`（v2.12.0）。
+- **方法**：以阅读源码为主——按目录与 `CMakeLists.txt` 建立模块地图，再深入关键类与调用关系；结论尽量定位到具体文件、类、函数。
+- **未完成项**：本文**未在本地完成一次完整的从源码构建**，构建相关结论基于对 `CMakeLists.txt` 与依赖声明的静态阅读（见第 19 节），标注为静态分析结果。
+- **规模参考**：自有源码约 21 万行（`src/backend` ~12.5 万 + `src/frontend` ~8.7 万），捆绑第三方 `src/3rdparty` ~7.5 万行，测试 `tests` ~5.6 万行，源码文件约 1196 个。
+
+## 5. 技术栈概览
+
+- **语言/标准**：C++17（`CMakeLists.txt` 中 `CMAKE_CXX_STANDARD 17`）。
+- **GUI**：Qt 6（≥6.5，`QT_MIN_VERSION`）+ KDE Frameworks 6（≥6.3，`KF_MIN_VERSION`）。
+- **数学库**：GSL（必需）、FFTW（可选，缺失时回退 GSL）、BISON（生成表达式解析器）。
+- **捆绑第三方**（`src/3rdparty/`）：Qt-Advanced-Docking-System（停靠界面）、QXlsx（Excel）、liborigin（读 Origin 文件）、mcap、vector_blf 等。
+- **可选能力**（`CMakeLists.txt` 中 `option(ENABLE_*)`）：HDF5、NetCDF、FITS、ROOT、MATIO、XLSX、Cantor、MQTT 等科学格式与集成，**全部可关**，最小构建只需 Qt6 + KF6 + GSL + BISON。
+
+KDE Frameworks 提供了主窗口框架（KXmlGuiWindow）、声明式菜单（XmlGui）、配置（KConfig）、压缩（KArchive，用于项目文件）、国际化（KI18n）、文件 IO（KIO）等基础设施——这也是该项目**依赖较重、移植成本高**的根源之一。
+
+## 6. 仓库目录结构
+
+```text
+src/
+├── backend/        领域层（不依赖 GUI）
+│   ├── core/       对象树基类、Project、Column、plugin 加载器
+│   ├── spreadsheet/、matrix/   数据容器
+│   ├── worksheet/  画布与绘图（plots/cartesian 下是绘图引擎核心）
+│   ├── datasources/ 数据源与导入过滤器（filters/）
+│   ├── gsl/        表达式解析器 + GSL 封装
+│   └── nsl/        自研数值算法库（C）
+├── frontend/       GUI 层（MainWin、ProjectExplorer、GuiObserver、dockwidgets/、各 View）
+├── Plugins/        Qt Designer 控件插件（非应用运行时插件，见第 17 节）
+├── tools/          辅助工具
+└── 3rdparty/       捆绑第三方库
+tests/              Qt Test 测试（按模块分目录）
+data/               主题、配色、示例项目（.lml）
+cmake/、各级 CMakeLists.txt   构建系统
+```
+
+## 7. 整体架构
+
+LabPlot 的第一性原理可以浓缩为一句话：**整个程序是一棵 Aspect 对象树 + 信号驱动的联动 + 渲染视图**。
+
+```mermaid
+graph TB
+    subgraph Frontend["frontend（GUI 层）"]
+        MainWin["MainWin 主窗口"]
+        PE["ProjectExplorer 项目树"]
+        GO["GuiObserver 路由"]
+        Docks["dockwidgets 属性面板（数十个）"]
+        Views["WorksheetView / SpreadsheetView 画布"]
+        MainWin --> PE
+        MainWin --> GO
+        GO --> Docks
+        MainWin --> Views
+    end
+    subgraph Backend["backend（领域层，不依赖 GUI）"]
+        Core["core: AbstractAspect / Project / Column"]
+        WS["worksheet/plots: CartesianPlot / XYCurve / Axis"]
+        DS["datasources: AbstractFileFilter / AsciiFilter"]
+        Math["gsl + nsl: 表达式解析 + 数值算法"]
+    end
+    subgraph External["第三方库 / 框架"]
+        QADS["QADS 停靠"]
+        Libs["GSL / FFTW"]
+        QtKF["Qt6 / KDE Frameworks 6"]
+    end
+    Frontend --> Backend
+    Backend --> External
+```
+
+这种"领域层与 GUI 层分离"的设计带来一个直接好处：`backend` 可以脱离界面用 `tests/` 驱动验收（项目通过 `#ifdef SDK` 甚至可物理剔除前端）。代价是需要一套机制把后端对象变化同步到前端——即下文反复出现的 **Qt 信号-槽** 与 `GuiObserver`。
+
+## 8. backend 与 frontend 的边界
+
+- **边界清晰**：领域对象（曲线、坐标轴、表格）全在 `src/backend`，UI 控件全在 `src/frontend`。
+- **UI 不直接拥有领域逻辑**：前端 Dock 持有的是**后端对象的指针**，通过调用后端 setter 改状态、通过监听后端信号刷新自己（见第 14 节双向绑定示例）。业务规则（如属性约束、计算、撤销）在后端。
+- **协作机制**：① Qt 信号-槽做跨层通知；② `GuiObserver`（`src/frontend/GuiObserver.cpp`）作为"选中对象 → 显示哪个属性面板"的路由中枢。
+
+**借鉴价值**：把领域模型做成可独立测试、可无界面运行的一层，是大型 GUI 项目控制复杂度的关键。LabPlot 用"信号驱动 + 指针引用"实现这一点，而没有引入额外的中间件。
+
+## 9. 核心对象模型
+
+整个系统建立在一个统一基类 **`AbstractAspect`**（`src/backend/core/AbstractAspect.h`）之上。几乎所有可见对象——`Folder`、`Workbook`、`Spreadsheet`、`Column`、`Worksheet`、`Axis`、`XYCurve`、`CartesianPlotLegend`、`TextLabel` 等——都继承它。
+
+它在基类层面统一提供了五种能力：
+- 命名：`name()`；
+- 父子导航：`parentAspect()`、`children()`、`addChild()`；
+- 撤销：`undoStack()`（接 Qt Undo Framework）；
+- 序列化：`save()`/`load()`（纯虚，子类各自实现）；
+- 信号：`childAspectAdded()`/`childAspectRemoved()` 等。
+
+**对象包含关系**（同时也是项目文件 XML 的嵌套结构）：
+
+```mermaid
+graph TD
+    Project["Project（项目根）"]
+    Project --> Folder
+    Folder --> Workbook
+    Folder --> Worksheet
+    Folder --> Spreadsheet1["Spreadsheet"]
+    Workbook --> Spreadsheet2["Spreadsheet"]
+    Workbook --> Matrix
+    Spreadsheet2 --> Column
+    Worksheet --> CartesianPlot
+    CartesianPlot --> Axis
+    CartesianPlot --> Legend["CartesianPlotLegend"]
+    CartesianPlot --> XYCurve
+    CartesianPlot --> XYFitCurve
+    XYCurve -. "引用（按路径）" .-> Column
+```
+
+**继承关系**（以分析曲线为例，说明"会算的曲线也只是一种曲线"）：
+
+```mermaid
+classDiagram
+    AbstractAspect <|-- AbstractColumn
+    AbstractColumn <|-- Column
+    AbstractAspect <|-- Worksheet
+    AbstractAspect <|-- Plot
+    Plot <|-- XYCurve
+    XYCurve <|-- XYAnalysisCurve
+    XYAnalysisCurve <|-- XYFitCurve
+    XYAnalysisCurve <|-- XYFourierTransformCurve
+```
+
+**这个设计解决了什么问题**：科学项目里有几十上百个层级化对象，如果每种对象各写一套"命名/撤销/存盘/通知"，既重复又容易不一致。统一基类让每加一种新对象，只要继承它并实现自己的 `save/load` 与绘制逻辑，就**自动获得**树管理、撤销、序列化、信号联动。
+**它增加了什么复杂度**：基类把 Undo、序列化、信号"焊"在一起，约束了所有子类的实现方式；这是一套需要严格遵守的范式，新人理解成本不低。
+**借鉴价值**：当一个系统要管理大量同质化、可编辑、可持久化的对象时，"统一基类 + 树形组织"比"为每类对象单独建表/建管理器"更可维护。
+
+## 10. Spreadsheet、Column 与数据容器
+
+`Column`（`src/backend/core/column/Column.h`，继承链 `Column → AbstractColumn → AbstractAspect`）是数据的落脚点，也是被低估的复杂点。它不是"一个数组"，而是一个**高性能列式数据单元**：
+
+- **7 种类型**（`AbstractColumn.h` 的 `ColumnMode`）：Double、Integer、BigInt、Text、DateTime、Month、Day；并用 `PlotDesignation`（X/Y/误差等）标记列在绘图中的角色。
+- **列式存储**：`src/backend/core/column/ColumnPrivate.h` 中 `void* m_data` 指向类型化的 `QVector<T>`，用类型擦除 + 模板访问。同一列数据连续存放，遍历与统计缓存友好。
+- **统计缓存 + 单调性**：`ColumnStatistics` 缓存约 25 项统计量（最小/最大/均值/中位数/分位数/方差/偏度等），懒计算并在数据变更时失效；`Properties`（Constant/Monotonic*/NonMonotonic）让"按值查最近点"在单调列上走二分查找。
+- **公式依赖**：`Column::setFormula(...)` 支持一列由引用其它列的表达式定义，开启 `autoUpdate` 后被引用列变化会触发本列重算——与分析曲线是同一套"信号驱动"机制。
+- **与表格 UI 解耦**：`SpreadsheetModel`（`src/backend/spreadsheet/`，继承 `QAbstractItemModel`）作为 Model 适配器，桥接后端 `Column` 与前端 `QTableView`，是典型的 MVC。
+
+**复杂度来源**：类型系统 + 列式存储 + 懒缓存失效 + 单调性加速 + 公式依赖 + Model 适配，叠在一起才构成"能装百万行还不卡"的数据引擎。
+
+## 11. Worksheet、Plot 与 Curve
+
+绘图核心在 `src/backend/worksheet/`，其中 `plots/cartesian/` 是难度最高的部分。
+
+- **Worksheet**：一张画布，前端用 `WorksheetView`（继承 `QGraphicsView`）渲染。
+- **CartesianPlot**（`plots/cartesian/CartesianPlot.cpp`）：笛卡尔坐标系图，容纳坐标轴、图例、各类曲线。
+- **XYCurve**（`plots/cartesian/XYCurve.cpp`）：最核心的曲线，绑定 x/y 数据列。
+- **坐标变换**是这里的命门——逻辑坐标（数据值）经 `CartesianScale`（`plots/cartesian/CartesianScale.cpp`）映射到场景坐标，再由 Qt 的 `QGraphicsView` 映射到像素。核心是一条可逆映射 `scene = f(value)·b + a`：
+  - 线性：`value*b + a`；
+  - 对数：`log(value)/log(base)*b + a`；
+  - 另有 sqrt/square/inverse —— **换坐标轴类型只换 f()**。
+- **2D 映射与裁剪**在 `CartesianCoordinateSystem`（`plots/cartesian/CartesianCoordinateSystem.cpp`）的 `mapLogicalToScene()` 中完成，并处理可见性裁剪。
+
+**复杂度来源（为什么这是最硬的部分）**：① 分段量程（range break）使一个方向上有多段 scale；② 一个图可含多套坐标系（multi-range）；③ 百万点需要像素级降采样（同一像素的点合并），相关逻辑见 `XYCurve.cpp` 中 `numberOfPixelX`/`addUniqueLine` 一带；④ 多坐标系联动要避免信号无限递归。坐标变换的数学不难，难在这些工程约束叠加。
+
+## 12. 从 CSV 到曲线绘制的完整链路
+
+下面是一条端到端调用链（关键类与方法，路径为仓库相对路径）：
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant IFW as ImportFileWidget
+    participant AF as AsciiFilter
+    participant SP as Spreadsheet/Column
+    participant MW as MainWin
+    participant WS as Worksheet
+    participant CP as CartesianPlot
+    participant XC as XYCurve
+    participant CS as CartesianCoordinateSystem
+    participant V as WorksheetView
+    U->>IFW: 选择 CSV 并配置
+    IFW->>AF: currentFileFilter() 创建 AsciiFilter
+    AF->>AF: initialize() 推断分隔符与列类型
+    AF->>SP: prepareImport() 分配 Column
+    AF->>SP: setValues() 写入数据
+    AF->>SP: finalizeImport()
+    U->>MW: newWorksheet()
+    MW->>WS: new Worksheet()
+    WS->>CP: new CartesianPlot()
+    CP->>XC: new XYCurve() + setXColumn/setYColumn
+    XC->>CS: mapLogicalToScene() 坐标变换
+    CS->>V: 触发 QGraphicsScene 重绘
+```
+
+要点：
+- 导入入口 `AsciiFilter::readDataFromFile`（`src/backend/datasources/filters/AsciiFilter.cpp`），列类型推断走 `AbstractFileFilter::columnMode(...)`，最终通过 `Spreadsheet::prepareImport`/`finalizeImport`（`src/backend/spreadsheet/Spreadsheet.cpp`）落入 `Column`。
+- 新建对象在前端 `MainWin`：`MainWin::newWorksheet()`、`MainWin::newSpreadsheet()`（`src/frontend/MainWin.cpp`，后者内部 `new Spreadsheet(...)` 并 `addChild`）；`CartesianPlot` 的创建可见于 `src/backend/worksheet/Worksheet.cpp`（`new CartesianPlot(...)`）。
+- 数据列变化通过信号驱动曲线 `retransform` 与画布重绘。
+
+## 13. 项目保存与加载机制
+
+- **格式**：项目文件 `.lml` 是**压缩的 XML**（支持 gzip/bzip2/xz，按魔术字节判别），列数据以 base64 编码。
+- **保存**：`Project::save`（`src/backend/core/Project.cpp`）递归调用每个对象的 `save()`，每个对象负责序列化自己。**对象之间的引用不存指针，而是存路径字符串**（如曲线存所引用列的路径）。
+- **加载是两阶段**（这是关键设计）：
+  1. 先重建整棵对象树，引用先以路径形式悬空；
+  2. `Project::restorePointers(...)`（`Project.cpp`）在所有对象就绪后，按路径查回对象、接上真实指针。核心是 `RESTORE_COLUMN_POINTER` 宏（`src/backend/lib/macros.h`），匹配 `path()` 后调用对应 setter。
+- **为什么两阶段**：XML 自上而下读取，引用目标可能尚未创建，无法即时赋指针——这与**链接器解析符号**同理：先建节点，后连边。
+- **顺序约束**：必须先 `restorePointers` 再 `retransform`，否则曲线缺列指针导致计算失败（源码注释明确说明）。
+- **版本兼容**：以 `buildXmlVersion`（`Project.cpp`，本版本值为 15）标识 XML 版本，加载时按历史版本做兼容处理。
+- **Autosave / 损坏恢复**：项目带自动保存能力；具体定时与损坏恢复策略的实现细节**待进一步验证**。
+
+## 14. Undo/Redo 的工程设计
+
+- LabPlot 基于 **Qt Undo Framework**（`QUndoStack`/`QUndoCommand`），而非自研撤销栈。
+- 几乎每个属性修改都被封装为命令对象压栈——这依赖 `AbstractAspect::undoStack()` 与一套 setter 宏范式（`src/backend/lib/macros.h` 中的 setter/命令模板）。
+- 双向绑定中的防回环是必须正视的工程问题。以 `AxisDock` 为例（`src/frontend/dockwidgets/AxisDock.cpp`）：
+  - 前端→后端：`AxisDock::startChanged(double)` 调用 `axis->setStart(value)`；
+  - 后端→前端：`AxisDock::axisStartChanged(double)` 把新值写回控件。
+  - 两者天然构成无限循环，靠 `BaseDock` 的 `m_initializing` 标志位与两个宏（`CONDITIONAL_LOCK_RETURN`/`CONDITIONAL_RETURN_NO_LOCK`，定义于 `src/backend/lib/macros.h`）断环：回填控件期间上锁，期间控件发出的信号被忽略。
+
+**复杂度来源**：要求"每一个用户可见操作都命令化"，并在数百种对象、数十个属性面板上保持一致；防回环是双向绑定系统的通用陷阱，必须全局统一规约。
+
+## 15. 导入过滤器与扩展方式
+
+- **统一抽象**：`AbstractFileFilter`（`src/backend/datasources/filters/AbstractFileFilter.h`）定义 `FileType` 枚举与纯虚接口：`readDataFromFile(...)`、`write(...)`、`save/load(...)`；并提供静态的 `columnMode(...)`（列类型推断）与 `fileType(...)`（按内容/扩展名探测）。
+- **CSV 实现**：`AsciiFilter` 经 `initialize()` 识别分隔符（`determineSeparator`）、表头与列类型（`determineColumnModes`），再逐行 `setValues` 写入，通过数据源的 `prepareImport/finalizeImport` 落库。值得注意：`AsciiFilter::write` 目前是 TODO，**CSV/LaTeX 导出由 `SpreadsheetView` 单独实现**，与导入过滤器解耦。
+- **新增一种格式需要改的位置**（依据源码归纳）：在 `AbstractFileFilter.h` 追加 `FileType` 枚举值；在 `fileType()`/`exclusiveFileType()` 的分支中登记；在前端 `ImportFileWidget`（`src/frontend/datasources/ImportFileWidget.cpp`）的 `currentFileFilter()` 工厂 switch 与选项控件 switch 中各加一路；新增 `XxxFilter.{h,cpp}` 三件套并在 `filters.h` 与 `CMakeLists.txt` 登记。
+- **导出图表 vs 导出数据是两条独立路径**：图表导出由 `WorksheetView::exportToFile`（`src/frontend/worksheet/WorksheetView.cpp`）用 `QPrinter`/`QSvgGenerator`/`QImage` 渲染 `scene()->render(...)`；数据导出由 `SpreadsheetView`（`src/frontend/spreadsheet/SpreadsheetView.cpp`）遍历行列写文本/LaTeX。
+
+**借鉴价值**：用统一过滤器抽象 + 工厂分发组织多格式 IO，是可扩展性的常见做法；但"新增格式要改多处枚举与 switch"也说明它**不是纯插件式扩展**，核心仍需改动。
+
+## 16. 数据分析模块
+
+所有分析曲线继承 `XYAnalysisCurve`（`src/backend/worksheet/plots/cartesian/XYAnalysisCurve.h`），复用同一编排骨架 `XYAnalysisCurvePrivate::recalculate()`：取数据源列 → 调用子类纯虚 `recalculateSpecific()` → 重绘并发 `dataChanged()`。子类只实现算法部分。两个代表：
+
+- **曲线拟合 `XYFitCurve`**（`plots/cartesian/XYFitCurve.cpp`）：参数在 `FitData`、结果在 `FitResult`。线性模型走 GSL `gsl_multifit_wlinear`；非线性走 Levenberg-Marquardt 求解器 `gsl_multifit_fdfsolver_lmsder`，迭代 `gsl_multifit_fdfsolver_iterate` 直到 `gsl_multifit_test_delta` 收敛或达 `maxIterations`。拟合曲线 y 值由 `ExpressionParser::tryEvaluateCartesian(...)` 用模型表达式 + 拟合参数求得；并生成隐藏的结果列与残差列挂回对象树。
+- **傅里叶变换 `XYFourierTransformCurve`**（`plots/cartesian/XYFourierTransformCurve.cpp`）：参数在 `TransformData`。底层调 `nsl_dft_transform_window`（`src/backend/nsl/nsl_dft.c`），FFT 后端在 `#ifdef HAVE_FFTW3` 时用 **FFTW3**，否则回退 **GSL** `gsl_fft_real_transform`。
+
+**关键认知**：硬数学（拟合求解、FFT、特殊函数、分布）全部委托给 GSL/FFTW，LabPlot 自有的 `src/backend/nsl/`（约 9000 多行 C）主要是**薄封装 + 库里没有的领域算法**（平滑、基线、降采样几何、峰检测、过程控制等）。用户公式与函数曲线则依赖一个由 **BISON** 生成的表达式解析器（`src/backend/gsl/`，含 `parser.ypp`）。
+
+## 17. 插件机制
+
+需要厘清两个不同含义的"插件"：
+
+- `src/Plugins/` 下是 **Qt Designer 控件插件**（`NumberSpinBox`、`UTCDateTimeWidget`，含 `.pro` 与 `*Plugin.cpp`），用于让自定义控件在 Qt Designer 设计 `.ui` 时可用，属于**开发期工具**，不是应用运行时扩展。
+- 真正的运行时插件加载器在 `src/backend/core/plugin/`（`PluginLoader`、`PluginManager`），从源码看主要服务于 **Notebook/Cantor 后端**集成（`src/backend/notebook/Notebook.cpp` 引用了它）。
+
+**结论**：LabPlot **不是一个以插件为主的可扩展框架**。新增图表类型、分析能力、导入格式等，主要通过**继承既有抽象 + 工厂/枚举登记**实现，需要改动核心代码，而非投放独立插件。"插件能在不改核心的情况下扩展多少能力"这一点的边界**待进一步验证**，但从现有结构判断范围有限。
+
+## 18. 测试体系
+
+- **框架**：Qt Test（`QTEST_MAIN`），无界面可通过 `xvfb-run ctest` 运行。
+- **规模与组织**：`tests/` 约 5.6 万行、约 75 个测试套件，按模块分目录：`backend`、`spreadsheet`、`matrix`、`cartesianplot`、`multirange`、`analysis`、`nsl`、`import_export`（下分 ASCII/HDF5/XLSX/CAN/SQL 等每种格式）、`livedata`、`commonfrontend` 等。
+- **代表性测试**：
+  - `tests/analysis/fit/FitTest.cpp`：用 NIST 标准数据集（如 Norris、Pontius）验证拟合参数、误差、R²、SSE 与官方基准吻合——这是对数值正确性的强约束。
+  - `tests/analysis/fourier_transformation/FourierTransformTest.cpp`：构造已知频率成分的信号，验证变换后在对应频点出现预期幅值。
+  - `import_export/` 下各格式测试：以样例文件为输入，校验导入后的行列与类型。
+- **覆盖倾向**：后端数据与数值算法覆盖较充分；纯 UI 交互路径覆盖相对较少（这是桌面应用的普遍现象）。
+
+**借鉴价值**：把数值正确性用标准数据集固化为可回归的测试，是科学软件可信度的基础；分层架构让后端可无界面测试，是测试投入能落地的前提。
+
+## 19. 构建系统
+
+- **CMake** 驱动，根目录与各模块均有 `CMakeLists.txt`。
+- **必需依赖**：Qt6（≥6.5）、KDE Frameworks 6（≥6.3，含 Archive/Config/I18n/KIO/XmlGui 等十余组件）、GSL、BISON、ECM。
+- **可选依赖**：以 `option(ENABLE_*)` 控制的科学格式与集成（FFTW/HDF5/NetCDF/FITS/ROOT/XLSX/Cantor 等），关闭后仍可构建一个具备核心绘图能力的精简版。
+- **跨平台**：含 Windows/macOS 分支与 Flatpak/Snap 打包配置。
+
+> 说明：本文未在本地完成一次完整构建，以上为对构建配置的静态阅读结论；实际构建会受具体平台 Qt6/KF6 可用性影响，**建议读者在满足 Qt6 + KF6 的环境中自行验证**。
+
+## 20. 大型 C++/Qt 桌面项目的工程特点
+
+从 LabPlot 能观察到这类项目的共性：
+
+- **统一对象基类 + 树**：用一套基类承载命名/撤销/序列化/信号，避免每类对象重复造轮子。
+- **信号-槽做解耦**：跨层、跨对象的联动几乎都靠信号，而非直接调用，代价是调用链不易静态追踪。
+- **pimpl 与宏范式**：大量使用 `*Private` 分离实现、用宏统一 setter/命令/防回环，减少样板但抬高了阅读门槛。
+- **数值能力外包**：把数学交给成熟库，自研只补领域算法——这是科学软件控制风险的务实选择。
+- **重型框架依赖**：深度绑定 KDE Frameworks，换来了大量现成能力，也带来了移植与（潜在）许可成本。
+
+## 21. 完整复刻为什么困难
+
+不谈具体团队，仅就工程本身：
+
+- **规模**：自有约 21 万行 + 5.6 万行测试，且站在 GSL/FFTW/Qt/KF 等之上，捆绑数万行第三方库。
+- **最硬的部分**：绘图引擎的坐标变换（分段量程、多坐标系、百万点降采样、防递归联动）几乎无现成替代，是工作量与风险的集中点。
+- **隐性成本**：撤销全覆盖、两阶段序列化与版本兼容、数十个属性面板的双向绑定、与官方对齐的数值测试——这些都不显眼却昂贵。
+- **许可约束**：GPL-2.0-or-later 的 copyleft 性质，叠加 GSL（GPL）等依赖，对任何**闭源**意图都是硬约束（需自行核实）。
+
+因此"逐行完整复刻"在工程上几乎不现实，更可行的是**理解其架构、按需实现一个精简子集**。
+
+## 22. 如何设计一个精简 MVP
+
+若以学习/原型为目的，一个能跑通核心闭环的精简版可包含：
+
+- **对象树地基**：一个 `AbstractAspect` 式基类（借力 Qt 的 `QObject` 父子、`QUndoStack`、`QAbstractItemModel`），支持命名/撤销/序列化/信号。
+- **数据容器**：单类型 `Column` + 列式存储 + `QAbstractItemModel` 适配的表格。
+- **绘图主干**：`QGraphicsView` 画布 + 线性/对数坐标变换 + 折线/散点曲线 + 坐标轴/图例（降采样从一开始内建）。
+- **IO**：CSV 导入 + PNG/PDF 导出 + 自定义或简化的项目文件格式（不必兼容 `.lml`）。
+- **分析**：接 GSL/Eigen 做线性/多项式/高斯拟合，作为区别于普通表格工具的能力。
+
+明确**不做**：科学二进制格式、Notebook、Live Data、信号分析全家桶、多坐标系断轴等高级特性。
+
+## 23. 本次源码阅读的收获
+
+- 理解了"把所有可见对象统一为一棵可撤销、可序列化、可联动的对象树"这一主线，以及它如何贯穿数据、绘图、分析、序列化。
+- 看清了"数据与视图解耦（MVC + 信号）+ 防回环规约"在真实代码中的落地方式。
+- 认识到一个看似简单的"画曲线"，其难度集中在坐标变换与大数据渲染，而非"画线"本身。
+- 体会到成熟科学软件"数学外包、领域算法自研、用标准数据集测正确性"的务实工程取舍。
+
+## 24. 尚未深入的部分（待进一步验证）
+
+- 应用入口 `main()` 的确切位置与启动序列（未定位到 `src/main.cpp`，**待进一步验证**）。
+- Live Data、Datapicker、Notebook/Cantor 的内部实现细节。
+- Autosave 的定时策略与项目损坏恢复机制。
+- 运行时插件加载器（`PluginManager`）的使用广度。
+- 未在本地完成完整构建与运行时性能实测，性能相关结论以源码阅读为准。
+
+## 25. 关键源码导航
+
+| 主题 | 关键文件 |
+|---|---|
+| 对象树基类 | `src/backend/core/AbstractAspect.h` |
+| 项目 / 序列化 | `src/backend/core/Project.cpp`、`src/backend/lib/macros.h`（RESTORE_* 宏） |
+| 数据列 | `src/backend/core/column/Column.h`、`ColumnPrivate.h`、`src/backend/spreadsheet/SpreadsheetModel.*` |
+| 绘图引擎 | `src/backend/worksheet/plots/cartesian/CartesianPlot.cpp`、`CartesianScale.cpp`、`CartesianCoordinateSystem.cpp`、`XYCurve.cpp` |
+| 分析曲线 | `src/backend/worksheet/plots/cartesian/XYAnalysisCurve.*`、`XYFitCurve.cpp`、`XYFourierTransformCurve.cpp` |
+| 数学引擎 | `src/backend/nsl/`、`src/backend/gsl/`（含 `parser.ypp`） |
+| 导入过滤器 | `src/backend/datasources/filters/AbstractFileFilter.h`、`AsciiFilter.cpp` |
+| 前端联动 | `src/frontend/MainWin.cpp`、`src/frontend/GuiObserver.cpp`、`src/frontend/dockwidgets/BaseDock.h`、`AxisDock.cpp` |
+| 测试 | `tests/analysis/fit/FitTest.cpp`、`tests/analysis/fourier_transformation/FourierTransformTest.cpp` |
+| 构建 | 根目录 `CMakeLists.txt`、`src/CMakeLists.txt` |
+
+## 26. 参考资料与项目归属
+
+- **项目**：LabPlot，由 KDE 社区与原作者开发，上游仓库 `github.com/KDE/labplot`。本文分析基于 commit `e8bf74a`（v2.12.0）。
+- **许可证**：主体 GPL-2.0-or-later（详见仓库 `LICENSES/` 与 `.reuse/dep5`）；捆绑第三方库各有其许可。引用、二次开发或分发前请自行核实义务。
+- **依赖项目**：Qt、KDE Frameworks、GSL、FFTW、Qt-Advanced-Docking-System、QXlsx、liborigin 等，归各自作者所有。
+- **本文性质**：个人源码阅读与架构分析笔记，非官方文档，不代表 LabPlot 项目立场；如与源码不符，以源码为准。
