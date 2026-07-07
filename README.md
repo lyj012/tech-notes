@@ -2,55 +2,49 @@
 
 个人技术知识库。
 
-记录真实项目开发中的设计方案、踩坑记录、系统架构与 AI 工程化实践。
+记录后端工程化、AI 工程化、系统设计和真实项目开发中的复盘笔记。
 
 ---
 
-## 当前方向
+## 目录
+
+### AI Engineering
+
+目录：[ai-engineering](./ai-engineering)
+
+记录 AI 辅助开发、AI 工程化方法论、Workflow、Skill、MCP、Agent、RAG 等相关学习与实践。
+
+当前内容包括：
+
+- AI 工程化开发方法论
+- AI 工程化开发操作手册
+- AI 辅助开发技术验证清单
+- Skill 与 MCP 工具开发复盘
+- 利用 AI 进行软件逆向工程的实战工作流程
+- LabPlot 源码理解
+
+### Backend Engineering Daily Training
+
+目录：[backend-engineering-daily-training](./backend-engineering-daily-training)
+
+记录后端工程化每日训练与复盘，重点关注真实后端系统中的稳定性、可维护性和工程化设计能力。
+
+当前内容包括：
+
+- Day 01：幂等设计复盘
+
+---
+
+## 关注方向
 
 - Java Backend
+- Backend Engineering
 - AI Engineering
 - System Design
 - SaaS Platform
 - Agent / RAG / Workflow
+- MCP / Skill
 
 ---
 
-## PDF Platform
-
----
-
-## AI Engineering
-
-记录 AI 工程化相关学习与项目实践。
-
-### Topics
-
-- Agent
-- RAG
-- Workflow
-- MCP
-- Prompt Engineering
-- Context Memory
-
----
-
-## 规划
-
-### PDF Platform
-
-- 游客支付后如何绑定登录用户
-- 为什么PDF下载不能直接暴露文件链接
-- 为什么PDF转换任务迁移到XXL-JOB
-- PDF平台会员体系设计
-
-### AI Engineering
-
-- AI研发工程师成长路线
-- MCP学习笔记
-- Workflow设计实践
-- Agent设计实践
-
----
-
-持续更新中...
+持续更新中。
