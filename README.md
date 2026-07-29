@@ -32,6 +32,27 @@
 当前内容包括：
 
 - Day 01：幂等设计复盘
+- Day 02：消息队列基础理解复盘
+- Day 03：ACK 消息确认机制复盘
+- Day 04：死信队列、失败重试与异常消息处理复盘
+- Day 05：延迟队列、ACK、重试与死信队列复盘
+- Day 06：分布式锁复盘
+- Day 07：事务边界与数据库、MQ 最终一致性复盘
+- Day 08：线上日志设计与 TraceId 复盘
+- Day 09：状态机与异步任务状态流转复盘
+- Day 10：配置中心 Apollo／Nacos 复盘
+- Day 11：操作日志
+- Day 12：RabbitMQ 生产者消息可靠性（Publisher Confirm）
+- Day 13：Kafka 消息积压（Message Backlog）
+- Day 14：Kafka Consumer Group 再均衡（Rebalance）
+- Day 15：消息顺序消费（Message Ordering）
+- Day 16：XXL-JOB 分布式任务调度
+- Day 17：Jenkins 持续集成（CI）与部署可用性判断
+- Day 18：Docker 容器化部署与 MySQL 连接故障排查
+- Day 19：Nginx 反向代理、负载均衡与 502、504 故障排查
+- Day 20：ELK 集中日志、TraceId 链路关联与 Kibana 故障排查
+- Day 21：Prometheus、Grafana 服务监控、业务指标与告警排障
+- Day 22：Redis 缓存穿透、缓存击穿、缓存雪崩
 
 ---
 
