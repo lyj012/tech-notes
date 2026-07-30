@@ -53,6 +53,7 @@
 - Day 20：ELK 集中日志、TraceId 链路关联与 Kibana 故障排查
 - Day 21：Prometheus、Grafana 服务监控、业务指标与告警排障
 - Day 22：Redis 缓存穿透、缓存击穿、缓存雪崩
+- Day 23：接口限流与大批量 Excel 去重处理
 
 ---
 
