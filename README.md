@@ -54,6 +54,7 @@
 - Day 21：Prometheus、Grafana 服务监控、业务指标与告警排障
 - Day 22：Redis 缓存穿透、缓存击穿、缓存雪崩
 - Day 23：接口限流与大批量 Excel 去重处理
+- Day 24：熔断、服务降级与级联故障保护
 
 ---
 
