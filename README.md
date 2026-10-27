@@ -22,6 +22,7 @@
 - Skill 与 MCP 工具开发复盘
 - 利用 AI 进行软件逆向工程的实战工作流程
 - LabPlot 源码理解
+- [Living Room Quest 技术架构：权威状态、受约束 AI 与多端交互](./ai-engineering/Living%20Room%20Quest%20%E6%8A%80%E6%9C%AF%E6%9E%B6%E6%9E%84%EF%BC%9A%E6%9D%83%E5%A8%81%E7%8A%B6%E6%80%81%E3%80%81%E5%8F%97%E7%BA%A6%E6%9D%9F%20AI%20%E4%B8%8E%E5%A4%9A%E7%AB%AF%E4%BA%A4%E4%BA%92.md)
 
 ### Backend Engineering Daily Training
 
