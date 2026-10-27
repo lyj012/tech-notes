@@ -24,9 +24,9 @@
 - LabPlot 源码理解
 - [Living Room Quest 技术架构：权威状态、受约束 AI 与多端交互](./ai-engineering/Living%20Room%20Quest%20%E6%8A%80%E6%9C%AF%E6%9E%B6%E6%9E%84%EF%BC%9A%E6%9D%83%E5%A8%81%E7%8A%B6%E6%80%81%E3%80%81%E5%8F%97%E7%BA%A6%E6%9D%9F%20AI%20%E4%B8%8E%E5%A4%9A%E7%AB%AF%E4%BA%A4%E4%BA%92.md)
 
-- [PDF 平台文件上传与 OBS 存储改造复盘](./ai-engineering/obs-upload.md)
-- [PDF 工具平台支付与会员体系设计复盘](./ai-engineering/pdf-platform-payment-system-review.md)
-- [基于 XXL-JOB 的支付与会员权益补偿机制复盘](./ai-engineering/xxl-job-payment-benefit-compensation-review.md)
+- [PDF 平台文件上传与 OBS 存储改造复盘](./ai-engineering/PDF%20%E5%B9%B3%E5%8F%B0%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E4%B8%8E%20OBS%20%E5%AD%98%E5%82%A8%E6%94%B9%E9%80%A0%E5%A4%8D%E7%9B%98.md)
+- [PDF 工具平台支付与会员体系设计复盘](./ai-engineering/PDF%20%E5%B7%A5%E5%85%B7%E5%B9%B3%E5%8F%B0%E6%94%AF%E4%BB%98%E4%B8%8E%E4%BC%9A%E5%91%98%E4%BD%93%E7%B3%BB%E8%AE%BE%E8%AE%A1%E5%A4%8D%E7%9B%98.md)
+- [基于 XXL-JOB 的支付与会员权益补偿机制复盘](./ai-engineering/%E5%9F%BA%E4%BA%8E%20XXL-JOB%20%E7%9A%84%E6%94%AF%E4%BB%98%E4%B8%8E%E4%BC%9A%E5%91%98%E6%9D%83%E7%9B%8A%E8%A1%A5%E5%81%BF%E6%9C%BA%E5%88%B6%E5%A4%8D%E7%9B%98.md)
 
 ### Backend Engineering Daily Training
 
