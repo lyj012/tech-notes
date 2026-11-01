@@ -707,4 +707,9 @@ Day 100 互动训练完成，整理复盘文档
 
 以上属于后续实践方向，不代表本日已经完成。
 
+### 参考资料
+
+- MySQL 8.4 Reference Manual — SELECT Statement：https://dev.mysql.com/doc/refman/8.4/en/select.html
+- MySQL 8.4 Reference Manual — Optimizing SELECT Statements：https://dev.mysql.com/doc/refman/8.4/en/select-optimization.html
+
 **归档定位：** 本文记录 2026-11-01 的真实互动学习、用户回答、疑问、纠错和 Day 99 间隔回忆。所有 SQL 和数据均为教学示例，没有执行 MySQL 查询、EXPLAIN、索引验证、百万级数据压测或生产验收。
